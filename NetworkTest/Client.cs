@@ -27,7 +27,7 @@ namespace NetworkClient
 
 		static void Main()
 		{
-			new Client();
+			Client client = new Client();
 		}
 
 		// 클라이언트 메인 함수
@@ -178,7 +178,6 @@ namespace NetworkClient
 					}
 					return 0;
 					#endregion
-					break;
 				// 클라이언트에게 파일 받기
 				case "upload":
 					#region 업로드
@@ -278,8 +277,20 @@ namespace NetworkClient
 					break;
 				// 클라이언트에게 파일 전송
 				case "download":
-					#region 다운로드
-					SendData(message[1]);
+                    #region 다운로드
+
+                    if (message.Length < 2)
+                    {
+                        SendData("Error1");
+                        return 0;
+                    }
+                    else
+                    {
+                        SendData("Success");
+                    }
+                    GetData();
+
+                    SendData(message[1]);
 
 					string canDownload = GetData();
 					if (canDownload.Equals("Error : 해당 파일이 존재하지 않습니다"))

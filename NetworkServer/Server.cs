@@ -9,7 +9,7 @@ namespace NetworkServer
 	{
 		// 아이디, 비밀번호 상수
 		private const string ID = "admin";
-		private const string PW = "1234";
+		private const string Password = "1234";
 
 		private readonly string DirectoryPath = string.Concat(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "\\ServerFile");
 
@@ -25,7 +25,7 @@ namespace NetworkServer
 
 		private static void Main()
 		{
-			new Server();
+			Server server = new Server();
 		}
 
 		// 서버 구동 메인 함수
@@ -42,6 +42,7 @@ namespace NetworkServer
 			server = new TcpListener(IPAddress.Any, 5000);
 			server.Start();
 			Console.WriteLine("Server Start");
+			Console.WriteLine("서버 IP : " + GetLocalIP());
 			#endregion
 
 			#region 클라이언트 연결 요청 받는 쓰레드 5개 실행
@@ -90,7 +91,7 @@ namespace NetworkServer
 							// 비밀번호인 경우
 							if (readString.Substring(0, 2).Equals("\n\n"))
 							{
-								SendData(readString.Substring(2).Equals(PW), "Success : 비밀번호 일치", "Error : 다시 입력해주세요", callbackClient);
+								SendData(readString.Substring(2).Equals(Password), "Success : 비밀번호 일치", "Error : 다시 입력해주세요", callbackClient);
 							}
 							// 아이디인 경우
 							else if (readString.Substring(0, 1).Equals("\n"))
@@ -115,24 +116,25 @@ namespace NetworkServer
 							//저장된 파일 목록 제공
 							case "fileList":
 								#region 파일목록
-								string[] filePathArray =  Directory.GetFiles(DirectoryPath, "*.*", SearchOption.AllDirectories);
+								string[] filePathArray = Directory.GetFiles(DirectoryPath, "*.*", SearchOption.AllDirectories);
 
 								if (filePathArray.Length is 0)
 								{
 									SendData("\n** 파일 없음 **\n", callbackClient.client);
+									continue;
 								}
 
 								string message = "\n** 파일 목록 **\n";
 								for (int i = 0; i < filePathArray.Length; i++)
 								{
 									string[] filePathSplit = filePathArray[i].Split('\\');
-									
+
 									decimal fileLength = new FileInfo(filePathArray[i]).Length;
 
 									string unit = string.Empty;
 
 									int count;
-									for (count = 0; (fileLength /= 1024) >= 1024 && count <= 3; count++);
+									for (count = 0; (fileLength /= 1024) >= 1024 && count <= 3; count++) ;
 									count++;
 									fileLength = Math.Round(fileLength, 2);
 									switch (count)
@@ -144,11 +146,11 @@ namespace NetworkServer
 										case 1:
 											unit = "KB";
 											break;
-										
+
 										case 2:
 											unit = "MB";
 											break;
-										
+
 										case 3:
 											unit = "GB";
 											break;
@@ -269,16 +271,28 @@ namespace NetworkServer
 							// 클라이언트에게 파일 전송
 							case "download":
 								#region 다운로드
+                                if (GetData(callbackClient, 1024).Equals("Error1"))
+                                {
+                                    SendData("Error : 명령어가 형식에 맞지 않습니다", callbackClient.client);
+                                    continue;
+                                }
+                                else
+                                {
+                                    SendData("Success", callbackClient.client);
+                                }
 								string name = GetData(callbackClient, 1024);
 								string downloadPath = string.Concat(DirectoryPath, '\\', name);
+
 
 								if (!File.Exists(downloadPath))
 								{
 									SendData("Error : 해당 파일이 존재하지 않습니다", callbackClient.client);
 									continue;
 								}
-
-								SendData("Success", callbackClient.client);
+								else
+								{
+									SendData("Success", callbackClient.client);
+								}
 
 								using (FileStream fileStream1 = File.OpenRead(downloadPath))
 								{
@@ -403,5 +417,22 @@ namespace NetworkServer
 
 			return byteData;
 		}
-	}
+
+        public string GetLocalIP()
+        {
+            IPHostEntry host = Dns.GetHostEntry(Dns.GetHostName());
+            string LocalIP = string.Empty;
+
+            for (int i = 0; i < host.AddressList.Length; i++)
+            {
+                if (host.AddressList[i].AddressFamily == AddressFamily.InterNetwork)
+                {
+                    LocalIP = host.AddressList[i].ToString();
+                    break;
+                }
+            }
+
+            return LocalIP;
+        }
+    }
 }
