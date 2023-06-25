@@ -418,7 +418,7 @@ namespace NetworkServer
 			return byteData;
 		}
 
-        public string GetLocalIP()
+        private string GetLocalIP()
         {
             IPHostEntry host = Dns.GetHostEntry(Dns.GetHostName());
             string LocalIP = string.Empty;
