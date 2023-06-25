@@ -10,7 +10,7 @@ namespace NetworkServer
 		// 아이디, 비밀번호 상수
 		private const string ID = "admin";
 		private const string Password = "1234";
-
+		// 서버 파일을 저장하는 디렉토리 경로
 		private readonly string DirectoryPath = string.Concat(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "\\ServerFile");
 
 		// 서버 전역변수
@@ -41,6 +41,9 @@ namespace NetworkServer
 			#region 서버 실행
 			server = new TcpListener(IPAddress.Any, 5000);
 			server.Start();
+			#endregion
+
+			#region 서버 IP 출력
 			Console.WriteLine("Server Start");
 			Console.WriteLine("서버 IP : " + GetLocalIP());
 			#endregion
@@ -48,15 +51,18 @@ namespace NetworkServer
 			#region 클라이언트 연결 요청 받는 쓰레드 5개 실행
 			while (true)
 			{
+				// 접속 허용
 				TcpClient client = server.AcceptTcpClient();
 
+				// 클라이언트 개수가 5개 이상이라면 접속 해제
 				if (clients.Count >= 5)
 				{
 					SendData("Error : 인원 수가 꽉찼습니다", client);
 					client.Close();
 					continue;
 				}
-
+				
+				// 클라이언트를 리스트에 추가하고 쓰레드를 생성하여 통신 시작
 				clients.Add(client);
 				Thread thread = new Thread(() => ReceiveData(client));
 				thread.Start();
@@ -67,7 +73,6 @@ namespace NetworkServer
 		// 클라이언트에서 보낸 데이터 읽기
 		private void ReceiveData(TcpClient tcpClient)
 		{
-			//ClientData callbackClient = asyncResult.AsyncState as ClientData;
 			ClientData callbackClient = new ClientData(tcpClient);
 			SendData("Sucess : 접속 성공", callbackClient.client);
 			try
@@ -78,6 +83,7 @@ namespace NetworkServer
 					try
 					{
 						#region 명령어 구별
+						// 클라이언트에서 받아온 정보->UTF8->string 순으로 변환
 						byte[] byteData = new byte[1024];
 						int readBytes = callbackClient.client.GetStream().Read(callbackClient.readByteData, 0, callbackClient.readByteData.Length);
 
@@ -116,8 +122,10 @@ namespace NetworkServer
 							//저장된 파일 목록 제공
 							case "fileList":
 								#region 파일목록
+								// 서버 디렉토리 정보 가져오기
 								string[] filePathArray = Directory.GetFiles(DirectoryPath, "*.*", SearchOption.AllDirectories);
 
+								// 서버 디렉토리에 아무것도 없다면 목록을 출력하지 않고 continue
 								if (filePathArray.Length is 0)
 								{
 									SendData("\n** 파일 없음 **\n", callbackClient.client);
@@ -133,6 +141,7 @@ namespace NetworkServer
 
 									string unit = string.Empty;
 
+									// bit로 받은 파일의 용량을 1024로 나눠서 용량을 단위로 나눠서 출력
 									int count;
 									for (count = 0; (fileLength /= 1024) >= 1024 && count <= 3; count++) ;
 									count++;
@@ -160,6 +169,7 @@ namespace NetworkServer
 								}
 								message = string.Concat(message, "\n");
 
+								// 파일 목록과 각각의 용량 값 클라이언트에 전송
 								SendData(message, callbackClient.client);
 								#endregion
 								break;
@@ -172,6 +182,7 @@ namespace NetworkServer
 								int readSize;
 
 								#region 경로 예외 처리
+								// 클라이언트에게 Error1을 받았다면
 								if (GetData(callbackClient, 1024).Equals("Error1"))
 								{
 									SendData("Error : 명령어가 형식에 맞지 않습니다", callbackClient.client);
@@ -182,6 +193,7 @@ namespace NetworkServer
 									SendData("Success", callbackClient.client);
 								}
 
+								// 클라이언트에게 Error2를 받았다면
 								if (GetData(callbackClient, 1024).Equals("Error2"))
 								{
 									SendData("Error : 그런 파일이 없습니다", callbackClient.client);
@@ -237,8 +249,8 @@ namespace NetworkServer
 								int integerLength = 0;
 								for (integerLength = 0; byteData[integerLength] >= 48 && byteData[integerLength] <= 57; integerLength++) ;
 
+								// long으로도 저장을 할 수 없기에 BigInteger로 용량 정보 값을 수신
 								BigInteger fileSize = BigInteger.Parse(Encoding.UTF8.GetString(byteData, 0, integerLength));
-								//long fileSize = long.Parse(Encoding.UTF8.GetString(byteData, 0, integerLength));
 								#endregion
 
 								#region 파일 byte 수신
@@ -246,15 +258,18 @@ namespace NetworkServer
 								{
 									while (true)
 									{
+										// 반복마다 최대 1048576 bit 만큼 클라이언트가 보낸 데이터를 받아옴
 										byteData = new byte[1048576];
 										readSize = callbackClient.client.GetStream().Read(byteData, 0, byteData.Length);
 										fileSize = BigInteger.Subtract(fileSize, readSize);
 										fileStream.Write(byteData, 0, readSize);
 										fileStream.Flush();
+										// 클라이언트가 보낸 데이터를 모두 받았다면 반복문 탈출
 										if (fileSize.Equals(0))
 											break;
 									}
 								}
+								// 예외 발생 시, 수신하던 파일 삭제 및 FileStream 종료
 								catch (IOException)
 								{
 									fileStream.Close();
@@ -271,7 +286,8 @@ namespace NetworkServer
 							// 클라이언트에게 파일 전송
 							case "download":
 								#region 다운로드
-                                if (GetData(callbackClient, 1024).Equals("Error1"))
+								// 클라이언트에게 Error1을 받았다면
+								if (GetData(callbackClient, 1024).Equals("Error1"))
                                 {
                                     SendData("Error : 명령어가 형식에 맞지 않습니다", callbackClient.client);
                                     continue;
@@ -280,10 +296,12 @@ namespace NetworkServer
                                 {
                                     SendData("Success", callbackClient.client);
                                 }
+
+								// 클라이언트에서 다운로드 받고 싶어하는 파일 이름을 수신 후 경로로 만듦
 								string name = GetData(callbackClient, 1024);
 								string downloadPath = string.Concat(DirectoryPath, '\\', name);
 
-
+								// 해당 이름의 파일이 존재한다면 Success, 존재하지 않다면 Error 전송
 								if (!File.Exists(downloadPath))
 								{
 									SendData("Error : 해당 파일이 존재하지 않습니다", callbackClient.client);
@@ -294,9 +312,10 @@ namespace NetworkServer
 									SendData("Success", callbackClient.client);
 								}
 
+								// 파일을 열어서 정보를 클라이언트에 수신
 								using (FileStream fileStream1 = File.OpenRead(downloadPath))
 								{
-									// 새로운 파일 이름 보내기
+									// 파일 이름 보내기
 									SendData(name, callbackClient.client);
 
 									// 파일 크기 보내기
@@ -307,15 +326,18 @@ namespace NetworkServer
 									{
 										while (true)
 										{
+											// 반복마다 최대 1048576 bit 만큼 파일 데이터를 전송
 											byte[] buffer = new byte[104857600];
 
 											int bytesRead = fileStream1.Read(buffer, 0, buffer.Length);
 											fileSize1 = BigInteger.Subtract(fileSize1, bytesRead);
 											callbackClient.client.GetStream().Write(buffer, 0, bytesRead);
+											// 파일 데이터를 모두 보냈다면 반복문 탈출
 											if (fileSize1.Equals(0))
 												break;
 										}
 									}
+									// 예외 발생 시, FileStream 종료
 									catch (IOException)
 									{
 										fileStream1.Close();
@@ -323,11 +345,13 @@ namespace NetworkServer
 									}
 								}
 
+								// 클라이언트에서 파일이 온전히 전송되지 않았다는 Error를 수신 받았다면, 에러 문구 클라이언트에 전송
 								if (GetData(callbackClient, 1024).Equals("Error"))
 								{
 									SendData("Error : 파일을 온전히 다운 받지 못하였습니다. 다시 시도해주세요", callbackClient.client);
 									continue;
 								}
+								// 아니라면 성공으로 간주
 								else
 								{
 									isSuccess = true;
@@ -354,6 +378,7 @@ namespace NetworkServer
 					}
 				}
 			}
+			// 부가적인 에러 발생 시, 클라이언트와의 연결 종료
 			catch (IOException)
 			{
 				RemoveClient(tcpClient);
@@ -364,6 +389,7 @@ namespace NetworkServer
 			}
 		}
 
+		// 리스트에 저장된 클라이언트 제거
 		private void RemoveClient(TcpClient tcpClient)
 		{
 			for (int count = 0; count < clients.Count; count++)
@@ -376,6 +402,7 @@ namespace NetworkServer
 			}
 		}
 
+		#region 클라이언트에 데이터 전송
 		// 조건에 따라 string 데이터 byte 배열로 변환
 		private void SendData(bool result, string successMessage, string failedMessage, ClientData clientData)
 		{
@@ -392,7 +419,10 @@ namespace NetworkServer
 
 			return byteData;
 		}
+		#endregion
 
+		#region 클라이언트에게서 데이터 수신
+		// 정해진 단위(arraySize)로 수신받고 수신받은 데이터를 정해진 단위(readSize)로 UTF8 형식 string으로 변환
 		private string GetData(ClientData clientData, long arraySize, int readSize)
 		{
 			clientData.client.GetStream().Flush();
@@ -401,6 +431,7 @@ namespace NetworkServer
 
 			return Encoding.UTF8.GetString(byteData, 0, readSize);
 		}
+		// 정해진 단위(arraySize)로 클라이언트에게서 데이터를 수신
 		private string GetData(ClientData clientData, long arraySize)
 		{
 			clientData.client.GetStream().Flush();
@@ -409,6 +440,7 @@ namespace NetworkServer
 
 			return Encoding.UTF8.GetString(byteData, 0, readSize);
 		}
+		// 1024 단위로 클라이언트에게서 데이터를 수신
 		private byte[] GetData(ClientData clientData)
 		{
 			clientData.client.GetStream().Flush();
@@ -417,8 +449,10 @@ namespace NetworkServer
 
 			return byteData;
 		}
+		#endregion
 
-        private string GetLocalIP()
+		// 서버 컴퓨터의 IP를 가져오는 함수
+		private string GetLocalIP()
         {
             IPHostEntry host = Dns.GetHostEntry(Dns.GetHostName());
             string LocalIP = string.Empty;
